@@ -26,18 +26,21 @@ def text_to_sequence(text, cleaner_names):
       List of integers corresponding to the symbols in the text
   '''
   sequence = []
-
+  
   # Check for curly braces and treat their contents as ARPAbet:
   while len(text):
+    
     m = _curly_re.match(text)
+    
     if not m:
-      sequence += _symbols_to_sequence(_clean_text(text, cleaner_names))
-      break
-    sequence += _symbols_to_sequence(_clean_text(m.group(1), cleaner_names))
-    sequence += _arpabet_to_sequence(m.group(2))
+        sequence += _symbols_to_sequence(_clean_text(text, cleaner_names))
+        
+        break
+    #sequence += _symbols_to_sequence(_clean_text(m.group(1), cleaner_names))
+    #sequence += _arpabet_to_sequence(m.group(2))
     text = m.group(3)
-
-  return sequence
+  
+  return sequence 
 
 
 def sequence_to_text(sequence):
@@ -54,16 +57,19 @@ def sequence_to_text(sequence):
 
 
 def _clean_text(text, cleaner_names):
-  for name in cleaner_names:
-    cleaner = getattr(cleaners, name)
-    if not cleaner:
-      raise Exception('Unknown cleaner: %s' % name)
-    text = cleaner(text)
-  return text
+    
+    for name in cleaner_names:
+        cleaner = getattr(cleaners, name)
+        if not cleaner:
+            raise Exception('Unknown cleaner: %s' % name)
+        
+        text = cleaner(text)
+    return text
 
 
 def _symbols_to_sequence(symbols):
-  return [_symbol_to_id[s] for s in symbols if _should_keep_symbol(s)]
+    
+    return [_symbol_to_id[s] for s in symbols if _should_keep_symbol(s)]
 
 
 def _arpabet_to_sequence(text):

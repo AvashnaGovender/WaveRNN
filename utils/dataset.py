@@ -111,9 +111,9 @@ def get_tts_dataset(path, batch_size, r) :
 
     with open(f'{path}text_dict.pkl', 'rb') as f:
         text_dict = pickle.load(f)
-
+    
     train_dataset = TTSDataset(path, dataset_ids, text_dict)
-
+    
     sampler = None
 
     if hp.tts_bin_lengths :
@@ -133,6 +133,43 @@ def get_tts_dataset(path, batch_size, r) :
 
     return train_set, attn_example
 
+def get_eval_dataset(path, batch_size, r) :
+
+    with open(f'{path}dataset_eval.pkl', 'rb') as f :
+        dataset = pickle.load(f)
+
+    dataset_ids = []
+    mel_lengths = []
+
+    for (id, len) in dataset :
+        if len <= hp.tts_max_mel_len :
+            dataset_ids += [id]
+            mel_lengths += [len]
+
+    with open(f'{path}text_dict_eval.pkl', 'rb') as f:
+        text_dict = pickle.load(f)
+    
+    eval_dataset = TTSDataset(path, dataset_ids, text_dict)
+    
+    sampler = None
+
+    if hp.tts_bin_lengths :
+        sampler = BinnedLengthSampler(mel_lengths, batch_size, batch_size * 3)
+
+    eval_set = DataLoader(eval_dataset,
+                           collate_fn=lambda batch : collate_tts(batch, r),
+                           batch_size=batch_size,
+                           sampler=sampler,
+                           num_workers=1,
+                           pin_memory=True)
+
+    longest = mel_lengths.index(max(mel_lengths))
+    attn_example = dataset_ids[longest]
+
+    # print(attn_example)
+
+    return eval_set, attn_example
+
 
 class TTSDataset(Dataset):
     def __init__(self, path, dataset_ids, text_dict) :
@@ -141,6 +178,7 @@ class TTSDataset(Dataset):
         self.text_dict = text_dict
 
     def __getitem__(self, index):
+        
         id = self.metadata[index]
         x = text_to_sequence(self.text_dict[id], hp.tts_cleaner_names)
         mel = np.load(f'{self.path}mel/{id}.npy')

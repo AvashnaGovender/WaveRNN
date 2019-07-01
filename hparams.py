@@ -2,13 +2,13 @@
 # CONFIG -----------------------------------------------------------------------------------------------------------#
 
 # Here are the input and output data paths (Note: you can override wav_path in preprocess.py)
-wav_path = '/path/to/wav_files/'
-data_path = 'data/'
-
+wav_path = '/home/avashna/LJSpeech-1.1/wavs_train'
+data_path = '/home/avashna//wave_rnn/data/'
+eval_path = '/home/avashna/LJSpeech-1.1/wavs_eval'
 # model ids are separate - that way you can use a new tts with an old wavernn and vice versa
 # NB: expect undefined behaviour if models were trained on different DSP settings
-voc_model_id = 'ljspeech_mol'
-tts_model_id = 'ljspeech_lsa_smooth_attention'
+voc_model_id = 'ljspeech_final_vocoder'
+tts_model_id = 'ljspeech_tacotron_gst'
 
 # set this to True if you are only interested in WaveRNN
 ignore_tts = False
@@ -73,7 +73,8 @@ tts_lstm_dims = 512
 tts_postnet_K = 8
 tts_num_highways = 4
 tts_dropout = 0.5
-tts_cleaner_names = ['english_cleaners']
+#ts_cleaner_names = ['english_cleaners']
+tts_cleaner_names = ['voxygen_cleaners']
 
 # Training
 
@@ -89,6 +90,10 @@ tts_clip_grad_norm = 1.0            # clips the gradient norm to prevent explosi
 tts_checkpoint_every = 2_000        # checkpoints the model every X steps
 # TODO: tts_phoneme_prob = 0.0              # [0 <-> 1] probability for feeding model phonemes vrs graphemes
 
+# GST Parameters
+ref_enc_filters = [32, 32, 64, 64, 128, 128]
+token_num = 10
+num_heads = 8
 
 # ------------------------------------------------------------------------------------------------------------------#
 

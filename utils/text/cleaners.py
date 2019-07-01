@@ -19,7 +19,7 @@ from .numbers import normalize_numbers
 
 # Regular expression matching whitespace:
 _whitespace_re = re.compile(r'\s+')
-
+_pipe_re = re.compile(r'|')
 # List of (regular expression, replacement) pairs for abbreviations:
 _abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in [
   ('mrs', 'misess'),
@@ -88,3 +88,11 @@ def english_cleaners(text):
   text = expand_abbreviations(text)
   text = collapse_whitespace(text)
   return text
+
+def voxygen_cleaners(text):
+    #print("Voxy cleaner")
+    #text = collapse_whitespace(text)
+    text = text.replace(' ','')
+    text = text.replace('|',' ')
+    #print(text)
+    return text
