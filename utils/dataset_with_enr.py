@@ -112,7 +112,13 @@ def get_tts_dataset(path, batch_size, r) :
     with open(f'{path}text_dict.pkl', 'rb') as f:
         text_dict = pickle.load(f)
     
-    train_dataset = TTSDataset(path, dataset_ids, text_dict)
+    
+    with open(f'{path}enr_dict.pkl', 'rb') as f:
+        enr_dict = pickle.load(f)
+    
+    
+    
+    train_dataset = TTSDataset(path, dataset_ids, text_dict, enr_dict)
     
     sampler = None
 
@@ -172,21 +178,33 @@ def get_eval_dataset(path, batch_size, r) :
 
 
 class TTSDataset(Dataset):
-    def __init__(self, path, dataset_ids, text_dict) :
+    def __init__(self, path, dataset_ids, text_dict, enr_dict) :
         self.path = path
         self.metadata = dataset_ids
         self.text_dict = text_dict
+        self.enr_dict = enr_dict
+        
 
     def __getitem__(self, index):
         
         id = self.metadata[index]
         if self.text_dict is not None:
             x = text_to_sequence(self.text_dict[id], hp.tts_cleaner_names)
+            
         else:
             x = []
+        
+        if self.enr_dict is not None:
+            enr = enr_dict[id]
+            enr = enr.T
+        else:
+            enr = []
+
         mel = np.load(f'{self.path}mel/{id}.npy')
         mel_len = mel.shape[-1]
-        return x, mel, id, mel_len
+        phn_length = len(enr)
+
+        return x, mel, id, mel_len, enr, phn_length
 
     def __len__(self):
         return len(self.metadata)
@@ -223,9 +241,16 @@ def collate_tts(batch, r):
     chars = torch.tensor(chars).long()
     mel = torch.tensor(mel)
 
+    enr_lens = [x[4].shape[-1] for x in batch]
+    max_enr_len = max(enr_lens) + 1 
+    if max_enr_len % r != 0:
+        max_enr_len += r - max_enr_len % r
+    enr = [pad2d(x[4], max_enr_len) for x in batch]
+    enr = np.stack(enr)
+
     # scale spectrograms to -4 <--> 4
     mel = (mel * 8.) - 4.
-    return chars, mel, ids, mel_lens
+    return chars, mel, ids, mel_lens, enr
 
 
 class BinnedLengthSampler(Sampler):

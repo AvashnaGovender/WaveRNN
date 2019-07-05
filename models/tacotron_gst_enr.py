@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import sys
-from GST import GST
+from GELT import GELT
 
 
 class HighwayNetwork(nn.Module) :
@@ -136,9 +136,7 @@ class PreNet(nn.Module) :
     def forward(self, x) :
         x = self.fc1(x)
         x = F.relu(x)
-        #print("in pre-net", x)
         x = F.dropout(x, self.p, training=self.training)
-        #print("in pre-net after dropout", x)
         x = self.fc2(x)
         x = F.relu(x)
         x = F.dropout(x, self.p, training=self.training)
@@ -233,8 +231,8 @@ class Decoder(nn.Module) :
        
         #print("decoder prenet", prenet_in.size())
         prenet_out = self.prenet(prenet_in)
-        
-        
+       
+
         # Compute the Attention RNN hidden state
         attn_rnn_in = torch.cat([context_vec, prenet_out], dim=-1)  
         attn_hidden = self.attn_rnn(attn_rnn_in.squeeze(1), attn_hidden)
@@ -249,9 +247,7 @@ class Decoder(nn.Module) :
         # Concat Attention RNN output w. Context Vector & project
         x = torch.cat([context_vec, attn_hidden], dim=1)
         x = self.rnn_input(x)
-       
         
-
         # Compute first Residual RNN
         rnn1_hidden_next, rnn1_cell = self.res_rnn1(x, (rnn1_hidden, rnn1_cell))
         if not self.generating :
@@ -267,7 +263,6 @@ class Decoder(nn.Module) :
         else :
             rnn2_hidden = rnn2_hidden_next
         x = x + rnn2_hidden
-        
         
         # Project Mels
         mels = self.mel_proj(x)
@@ -294,7 +289,7 @@ class Tacotron(nn.Module) :
 
         self.init_model()
         self.num_params()
-        self.gst = GST()
+        self.gelt = GELT()
 
         # Unfortunately I have to put these settings into params in order to save
         # if anyone knows a better way of doing this please open an issue in the repo
@@ -319,11 +314,12 @@ class Tacotron(nn.Module) :
         else :
             self.encoder.train()
             self.postnet.train()
-            self.gst.train()
+            self.gelt.train()
             self.decoder.generating = False
                     
         batch_size, n_mels, steps  = m.size()
-         
+        batch_size, dimensions, phn_steps  = enr.size()
+
         # Initialise all hidden states and pack into tuple
         attn_hidden = torch.zeros(batch_size, self.decoder_dims).cuda()
         rnn1_hidden = torch.zeros(batch_size, self.lstm_dims).cuda()
@@ -358,22 +354,22 @@ class Tacotron(nn.Module) :
 
         #print("projected seq size" ,encoder_seq_proj.size())
 
-        m_gst = m.view(batch_size, steps, n_mels)
-        print("mel_size before style embedding", m.size())
-        print("mel_size input to  style embedding", m_gst.size())
+        enr_gelt = enr.view(batch_size, phn_steps, dimensions)
+        print("enr size before style embedding", enr.size())
+        print(" enr input to enr token layer ", enr_gst.size())
 
-        style_embed = self.gst(m_gst)
-        print("style_embedding output", style_embed.size())
+        enr_embed = self.gelt(enr_gelt)
+        print("style_embedding output", enr_embed.size())
         
         #Need to add embedding to every text encoder state
-        style_embed  = style_embed.expand_as(encoder_seq)
+        enr_embed  = enr_embed.expand_as(encoder_seq)
         
-        print("style embedding expanded", style_embed.size())
+        print("style embedding expanded", enr_embed.size())
 
-        encoder_seq = encoder_seq + style_embed 
+        encoder_seq = encoder_seq + enr_embed 
         
-        #encoder_seq_proj = self.encoder_proj(encoder_seq)
-        encoder_seq_proj = encoder_seq 
+        encoder_seq_proj = self.encoder_proj(encoder_seq)
+
         print("final encoder input  embedding", encoder_seq_proj.size())
 
         
@@ -393,8 +389,6 @@ class Tacotron(nn.Module) :
             attn_scores.append(scores)
         
        
-        #print("XX", mel_outputs[0])
-
         # Concat the mel outputs into sequence
         mel_outputs = torch.cat(mel_outputs, dim=2)
         
@@ -409,17 +403,15 @@ class Tacotron(nn.Module) :
             
         return mel_outputs, linear, attn_scores
     
-    def generate(self, x,ref_mels,gst_index, steps=2000) :
+    def generate(self, x,ref_mels, steps=2000) :
         print("Generate pass")
 
         self.encoder.eval()
         self.postnet.eval()
         self.gst.eval()
-        self.decoder.eval()
+
         self.decoder.generating = True
-        if ref_mels is not None:
-            print("Ref mel steps defined")
-            batch_size, n_mels,m_steps  = ref_mels.size()
+        batch_size, n_mels,m_steps  = ref_mels.size()
         
         batch_size = 1
         x = torch.LongTensor(x).unsqueeze(0).cuda()
@@ -436,7 +428,7 @@ class Tacotron(nn.Module) :
         cell_states = (rnn1_cell, rnn2_cell)
         
         # Need a <GO> Frame for start of decoder loop
-        go_frame = torch.zeros(batch_size, self.n_mels).cuda()
+        go_frame = torch.zeros(batch_size, n_mels).cuda()
         
         # Need an initial context vector
         context_vec = torch.zeros(batch_size, self.decoder_dims).cuda()
@@ -450,44 +442,37 @@ class Tacotron(nn.Module) :
         
         
         print("encoder sequennce", encoder_seq.size())
-       # encoder_seq_proj = self.encoder_proj(encoder_seq)
-       # print("Text encoder seq", encoder_seq_proj.size())
+        encoder_seq_proj = self.encoder_proj(encoder_seq)
+        print("Text encoder seq", encoder_seq_proj.size())
 
         #paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
-        if ref_mels is not None:
-            print("Ref mel gst size change")
-            m_gst = ref_mels.view(batch_size,m_steps, n_mels)
-        else:
-            m_gst = None
+        m_gst = ref_mels.view(batch_size,m_steps, n_mels)
 
         #eval_set, _ = get_eval_dataset(paths.data, 1,1)
 
-        #print("Ref mel size", m_gst.size())
+        print("Ref mel size", m_gst.size())
 
         #print("ref mel", m_gst)
         
-        style_embed = self.gst(m_gst, gst_index)
+        style_embed = self.gst(m_gst)
         print("style_embedding", style_embed.size())
         #print("style embedding", style_embed)
 
-        print(style_embed)       
+       
         #Need to add embedding to every text encoder state
-        style_embed  = style_embed.expand_as(encoder_seq)
+        style_embed  = style_embed.expand_as(encoder_seq_proj)
        
         print("style embed expanded" , style_embed.size())
 
-        encoder_seq = encoder_seq + style_embed
+        encoder_seq_proj = encoder_seq_proj + style_embed
 
-        encoder_seq_proj = encoder_seq
-        #encoder_seq_proj = self.encoder_proj(encoder_seq)
+        
+        print("final encoder seq", encoder_seq.size())
 
-        #print("final encoder seq", encoder_seq)
-    
        # sys.exit()
         # Need a couple of lists for outputs
         mel_outputs, attn_scores = [], []
-        print(batch_size)
-
+        
         # Run the decoder loop
         for t in range(0, steps, self.r) :
             prenet_in = mel_outputs[-1][:, :, -1] if t > 0 else go_frame
@@ -500,7 +485,7 @@ class Tacotron(nn.Module) :
             if (mel_frames < -3.8).all() and t > 10 : break
        
         
-        #print("XX", mel_outputs[0])        
+        
        # print("d1:", len(mel_outputs))
        # print("d2", len(mel_outputs[0]))
        # print("d3:", len(mel_outputs[0][0]))
@@ -516,7 +501,6 @@ class Tacotron(nn.Module) :
         # Concat the mel outputs into sequence
         mel_outputs = torch.cat(mel_outputs, dim=2)
         
-        #print(mel_outputs[0])
         #print("d5", len(mel_outputs))
         #print("d6", len(mel_outputs[0]))
         #print("d7", len(mel_outputs[0][0]))
