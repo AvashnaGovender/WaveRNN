@@ -24,17 +24,15 @@ def tts_train_loop(model, optimizer, train_set, lr, train_steps, attn_example):
 
         start = time.time()
         running_loss = 0
+        
 
         for i, (x, m, ids, _) in enumerate(train_set, 1):
-            
+            model.train(True)
             optimizer.zero_grad()
 
             x, m = x.cuda(), m.cuda()
 
-           # print("inputs size:" ,x.size())
-           # print("mel_targets size", m.size() )
-            print("mel ID",ids) 
-            
+        
             m1_hat, m2_hat, attention = model(x, m)
 
             m1_loss = F.l1_loss(m1_hat, m)
