@@ -15,46 +15,23 @@ from torch.distributions import uniform
 
 class GST(nn.Module):
 
-    def __init__(self):
+    def __init__(self,ref_enc_filters ):
 
         super().__init__()
-        self.ref_encoder = ReferenceEncoder()
-   #     self.stl = STL()
+	self.ref_enc_filters
+        self.ref_encoder = ReferenceEncoder(self.ref_enc_filters)
+
+
         
-    
-    
-        
-    def forward(self, inputs, gst_index):
+    def forward(self, inputs):
         
         if inputs is not None:
             print("USING REF")
-            enc_out = self.ref_encoder(inputs)      
-            style_embed = enc_out
-            print(style_embed)
+            style = self.ref_encoder(inputs)      
 
-
-           # style_embed = style_embed.unsqueeze(1)
-            #style_embed = self.stl(style_embed, None)
-            #print(style_embed)
-        else:
-            print("USING WEIGHTS")
-            style_embed = self.stl(inputs, gst_index)
-        
-            
-        #print(style_embed)
         return style_embed
 
-class BatchNormConv2D(nn.Module) :
-    def __init__(self, in_channels, out_channels,  relu=True) :
-        super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=(3,3), stride=(2,2), padding=(1,1))
-        self.bnorm = nn.BatchNorm2d(out_channels)
-        self.relu = relu
 
-    def forward(self, x) :
-        x = self.conv(x)
-        x = F.relu(x) if self.relu is True else x
-        return self.bnorm(x)
 
 class ReferenceEncoder(nn.Module):
     '''
@@ -62,11 +39,10 @@ class ReferenceEncoder(nn.Module):
     outputs --- [N, ref_enc_gru_size]
     '''
 
-    def __init__(self):
+    def __init__(self, ref_enc_filters):
 
         super().__init__()
         
-        ref_enc_filters = hp.ref_enc_filters
         K = len(ref_enc_filters)
         filters = [1] + ref_enc_filters
         
@@ -77,7 +53,7 @@ class ReferenceEncoder(nn.Module):
         
         
         self.gru = nn.GRU(256,128,batch_first=True)
-        self.project = nn.Linear(128,256)
+
 
 
     def forward(self, inputs):
@@ -102,195 +78,16 @@ class ReferenceEncoder(nn.Module):
         print("ref encoder out4:", out.size(), "should be [N, Ty//2^K, 128*n_mels//2^K]")
 
         
-        out, mem = self.gru(out)  # out --- [1, N, E//2]
-        print("ref encoder encoder GRU hidden:", mem.size(), "should be [1, N, E//2]")
-        print("ref encoder encoder GRU output:", out.size(), "should be [N, Ty//2^K, E//2]")
+        out, mem = self.gru(out)  # mem --- [1, N, E//2]
+     
         
-        out =  out[:,-1,:]
+       # out =  out[:,-1,:]
         
-        projected = self.project(out)
-        print("ref encoder projected output:", projected.size(), "should be [N, E]")
-        
-        final_out = torch.tanh(projected)
 
-        print("final output:", final_out.size(), "should be [N, E]")
-
-
-        return final_out
+        return mem.squeeze(0)  #original GST code uses memory and not output
 
     
 
-
-class STL(nn.Module):
-    '''
-    inputs --- [N, E//2]
-    '''
-
-    def __init__(self):
-
-        super().__init__()
-        self.embed = nn.Parameter(torch.FloatTensor(hp.token_num, hp.tts_embed_dims // hp.num_heads))
-        d_q = hp.tts_embed_dims 
-        d_k = hp.tts_embed_dims // hp.num_heads
-        self.num_tokens = hp.token_num
-        
-        # self.attention = MultiHeadAttention(hp.num_heads, d_model, d_q, d_v)
-        print(d_q)
-        print(d_k)
-        self.allkeys = nn.Linear(in_features=d_k, out_features=hp.tts_embed_dims, bias=False)
-
-        self.attention = MultiHeadAttention(query_dim=d_q, key_dim=d_k, num_units=hp.tts_embed_dims, num_heads=hp.num_heads)
-
-        init.normal_(self.embed, mean=0, std=0.5)
-
-    def forward(self, inputs, gst_index):
-        
-        if inputs is not None:
-            print("USING REF STL")
-
-            print("Entering STL wuh inputs:", inputs.size() )
-            N = inputs.size(0) #batch size
-            #query = inputs.unsqueeze(1)  # [N, 1, E//2]
-            query = inputs
-            print("STL  query", query.size(), "should be [N, 1, E//2]")
-
-            keys = torch.tanh(self.embed).unsqueeze(0).expand(N, -1, -1)  # [N, token_num, E // num_heads]
-            
-            
-            print("STL keys", keys.size(), "should be [N, token_num, E // num_heads]")
-        
-            style_embed = self.attention(query, keys)
-            print("final style embedding:", style_embed.size(), "should be [N,1,256]")
-        else:
-
-            print("Generating style using weights")
-            N = 1
-            keys = torch.tanh(self.embed.expand(N, -1, -1))
-            #keys = self.allkeys(keys)
-            key = keys.view(10,32) 
-            labels = torch.arange(10)
-            labels = labels.reshape(10, 1)
-            num_classes = self.num_tokens
-            one_hot_target = (labels == torch.arange(num_classes).reshape(1, num_classes)).float()
-           
-            x = torch.Tensor(8,10)
-            y = torch.rand(1,10)
-            
-            x = torch.zeros([8,10])
-            print("TOKEN", gst_index) 
-            y1 = torch.Tensor([0.0, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.8])
-            y2 = torch.Tensor([0.1, 0.2, 0.0, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0,0.8])
-            y3 = torch.Tensor([0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.2, 0.4, 0.0,0.0])
-
-            
-            x[0] = y3
-            #x[1] = y2
-            #x[2] = y3
-            weights = x.cuda()
-            #weights = torch.add(x,y)
-            #weights = y.unsqueeze(0).repeat(1,8,1).view(8,10).cuda()
-            #print("weights - before", weights)
-            #distribution = uniform.Uniform(torch.tensor([0.0]), torch.tensor([1.0]))
-            #weights = distribution.sample(torch.Size([8,10]))
-            #weights = F.softmax(x, dim = -1).cuda()
-            #weights = weights.view(8,10).cuda()
-            print("weights", weights)
-            #weight = np.transpose(one_hot_target).expand(N, -1, -1).cuda()
-            
- 
-            print("keys 1", keys.size())
-            print("weights", weights.size())
-             
-            #keys = keys.transpose(1, 2)
-            #print("keys transpose", keys.size())
-
-                       
-                      
-            
-            out = torch.matmul( weights, keys)
-            out = out.view(1,1,256)
-            style_embed = out
-            print(out.shape)
-            #print(out)
-            
-
-        return style_embed
-
-
-class MultiHeadAttention(nn.Module):
-    '''
-    input:
-        query --- [N, T_q, query_dim]
-        key --- [N, T_k, key_dim]
-    output:
-        out --- [N, T_q, num_units]
-    '''
-
-    def __init__(self, query_dim, key_dim, num_units, num_heads):
-
-        super().__init__()
-        self.num_units = num_units
-        self.num_heads = num_heads
-        self.key_dim = key_dim
-
-        self.W_query = nn.Linear(in_features=query_dim, out_features=num_units, bias=False)
-        #self.proj = nn.Linear(256,128, bias = False)
-        
-        self.W_key = nn.Linear(in_features=key_dim, out_features=num_units, bias=False)
-        self.W_value = nn.Linear(in_features=key_dim, out_features=num_units, bias=False)
-
-        self.out = nn.Linear(self.num_units, self.num_units, bias= False)
-    def forward(self, query, key):
-        #uery = self.proj(query)
-        #print("here",query.size())
-        querys = self.W_query(query)  # [N, T_q, num_units]
-        keys = self.W_key(key)  # [N, T_k, num_units]
-        values = self.W_value(key)
-
-
-        #print("multihead query:", querys, "should be [N, T_q, num_units]")
-        #print("multihead query length",querys[0][0])
-        #print("multihead keys:", keys, "should be [N,token_num , num_units]")
-       # print("multihead values:", values.size())
-         
-        split_size = self.num_units // self.num_heads
-        querys = torch.stack(torch.split(querys, split_size, dim=2), dim=0)  # [h, N, T_q, num_units/h]
-        keys = torch.stack(torch.split(keys, split_size, dim=2), dim=0)  # [h, N, token_num, _units/h]
-        values = torch.stack(torch.split(values, split_size, dim=2), dim=0)  # [h, N, token_num, num_units/h]
-
-        
-        
-        querys = querys.transpose(0,1)
-        keys = keys.transpose(0,1)
-        values = values.transpose(0,1)
-        print("multihead2 query:", querys.size())
-        print("multihead2 keys:", keys.size())
-        print("multihead2 values:", values.size())
-        # score = softmax(QK^T / (d_k ** 0.5))
-        print("transpose the keys:", keys.transpose(-2, -1).size()) 
-        scores = torch.matmul(querys, keys.transpose(-2, -1))  # [ N,h, T_q, T_k]
-        
-        print("scores", scores.size(), "should be [N, h, T_q, token_num]")
-        print("key_dim",self.key_dim)
-        scores = scores / (self.key_dim ** 0.5)
-        scores = F.softmax(scores, dim=-1)
-        print("scores after softmax",scores.size(), "should be [N, h, T_q, token_num]")
-
-        # out = score * V
-        out = torch.matmul(scores, values)  # [h, N, T_q, num_units/h]
-       
-    
-        print("output",out.size(), "should be [N, h, T_q, num_units/h]")
-        out = out.transpose(0,1)
-        #concat = scores.transpose(1,2).contiguous().view(32,-1, self.key_dim)
-        out = torch.cat(torch.split(out, 1, dim=0), dim=3).squeeze(0)  # [N, T_q, num_units]
-        
-        
-        #out = self.out(out)
-        print("out 2", out.size(), "should be [N, T_q, num_units]")
-      #  print(out)
-       
-        return out
 class HighwayNetwork(nn.Module) :
     def __init__(self, size) :
         super().__init__()
@@ -317,7 +114,6 @@ class Encoder(nn.Module) :
         
     def forward(self, x) :
         x = self.embedding(x)
-  
         x = self.pre_net(x)
         print("text encoder size after prenet", x.size())
 
@@ -329,6 +125,17 @@ class Encoder(nn.Module) :
         
         return x, mem
 
+class BatchNormConv2D(nn.Module) :
+    def __init__(self, in_channels, out_channels,  relu=True) :
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=(3,3), stride=(2,2), padding=(1,1), bias=False)
+        self.bnorm = nn.BatchNorm2d(out_channels)
+        self.relu = relu
+
+    def forward(self, x) :
+        x = self.conv(x)
+        x = F.relu(x) if self.relu is True else x
+        return self.bnorm(x)
 
 class BatchNormConv(nn.Module) :
     def __init__(self, in_channels, out_channels, kernel, relu=True) :
@@ -405,11 +212,8 @@ class CBHG(nn.Module) :
 
         # And then the RNN
         x, mem  = self.rnn(x)
-        
-        
-        
-        
-        return x, mem
+  
+        return x
 
 
 class PreNet(nn.Module) :
@@ -422,9 +226,9 @@ class PreNet(nn.Module) :
     def forward(self, x) :
         x = self.fc1(x)
         x = F.relu(x)
-        #print("in pre-net", x)
+        
         x = F.dropout(x, self.p, training=self.training)
-        #print("in pre-net after dropout", x)
+        
         x = self.fc2(x)
         x = F.relu(x)
         x = F.dropout(x, self.p, training=self.training)
@@ -449,6 +253,7 @@ class Attention(nn.Module) :
         u = self.v(torch.tanh(encoder_seq_proj + query_proj))
         scores = F.softmax(u, dim=1)
         return scores.transpose(1, 2)
+
 
 
 class LSA(nn.Module):
@@ -494,8 +299,8 @@ class Decoder(nn.Module) :
         self.r = None
         self.generating = False
         self.n_mels = n_mels
-        self.decoder_prenet = PreNet(n_mels)
-        self.attn_net = Attention(decoder_dims)
+        self.decoder_prenet = PreNet(n_mels)	
+        self.attn_net = Attention(decoder_dims) # If attention works procced with attention otherwise need to work with the LSA attention
 
         self.attn_rnn = nn.GRUCell(decoder_dims+ decoder_dims // 2,decoder_dims)
 
@@ -514,7 +319,7 @@ class Decoder(nn.Module) :
         
         # Need this for reshaping mels
         batch_size = encoder_seq.size(0)
-        T_x = encoder_seq.size(1)
+        
         
         # Unpack the hidden and cell states
         attn_hidden, rnn1_hidden, rnn2_hidden = hidden_states
@@ -539,14 +344,6 @@ class Decoder(nn.Module) :
         print("Attention hidden", attn_hidden.size())
 
 
-        
-        #attn_apply = torch.bmm(attn_weights, encoder_seq)
-        
-        #attn_project = self.attn_projection(torch.cat([attn_apply, outputs], dim=2))
-        
-        
-        
-        
         # Compute the attention scores 
         scores = self.attn_net(encoder_seq_proj, attn_hidden, t)
         
@@ -612,7 +409,7 @@ class Decoder(nn.Module) :
     
 class Tacotron(nn.Module) :
     def __init__(self, embed_dims, num_chars, encoder_dims, decoder_dims, n_mels, fft_bins, postnet_dims,
-                 encoder_K, lstm_dims, postnet_K, num_highways, dropout) :
+                 encoder_K, lstm_dims, postnet_K, num_highways, dropout, ref_filters) :
         super().__init__()
         self.n_mels = n_mels
         self.lstm_dims = lstm_dims
@@ -628,7 +425,7 @@ class Tacotron(nn.Module) :
 
         self.init_model()
         self.num_params()
-        self.gst = GST()
+        self.gst = GST(ref_filters)
 
         # Unfortunately I have to put these settings into params in order to save
         # if anyone knows a better way of doing this please open an issue in the repo
@@ -678,7 +475,7 @@ class Tacotron(nn.Module) :
         
         
         print("input to encoder size", x.size())
-        encoder_seq, memory = self.encoder(x)
+        encoder_seq = self.encoder(x)
         
         
         print("text encoder output",encoder_seq.size())
@@ -688,7 +485,7 @@ class Tacotron(nn.Module) :
        
         print("mel_size input to Ref encoder", m_gst.size())
 
-        style_embed = self.gst(m_gst, None)
+        style_embed = self.gst(m_gst)
        
         print("style_embedding output", style_embed.size())
 
@@ -696,12 +493,11 @@ class Tacotron(nn.Module) :
         style_embed  = style_embed.unsqueeze(1)
 
         print(style_embed.size())
-        #Tx = encoder_seq.size(1)
-        #style_embed = style_embed.repeat(1, Tx, 1)
-        #print("style embedding expanded", style_embed.size())
         
-        # concatenate
-        #final_enc_seq = torch.cat((encoder_seq, style_embed), dim = -1) 
+	style_embed = style_embed.expand_as(encoder_seq)        
+	
+	# add embeddings
+
         final_enc_seq = encoder_seq + style_embed
         
         
@@ -732,17 +528,10 @@ class Tacotron(nn.Module) :
            
     
        
-        #print("XX", mel_outputs[0].size())
 
         # Concat the mel outputs into sequence
         mel_outputs = torch.cat(mel_outputs, dim=2)
         print(mel_outputs.size())
-        #print(steps)
-       
-        #print(mel_outputs[0].size())
-
-  
- 
 
   
         # Post-Process for Linear Spectrograms
@@ -758,13 +547,13 @@ class Tacotron(nn.Module) :
             
         return mel_outputs, linear, attn_scores
     
-    def generate(self, x,ref_mels,gst_index, steps=2000) :
+    def generate(self, x,ref_mels, steps=2000) :
         print("Generate pass")
         	
         self.encoder.eval()
         self.postnet.eval()
         self.gst.eval()
-        #self.decoder.eval()
+        
         self.decoder.generating = True
         self.training = False
 
@@ -800,7 +589,7 @@ class Tacotron(nn.Module) :
         
         # Project the encoder outputs to avoid 
         # unnecessary matmuls in the decoder loop
-        encoder_seq, memory = self.encoder(x)    
+        encoder_seq = self.encoder(x)    
         print("encoder sequennce", encoder_seq.size())
    
    
@@ -815,12 +604,13 @@ class Tacotron(nn.Module) :
             m_gst = None
 
         
-        style_embed = self.gst(m_gst, None)
+        style_embed = self.gst(m_gst)
+
         print("style_embedding", style_embed.size())
     
         style_embed  = style_embed.unsqueeze(1)
 
-        print("style embed expanded" , style_embed.size())
+        print("style embed expanded" , style_embed.size()) # change code to size (do we need to expand to match encoder_seq)
 
         final_encoder_seq = encoder_seq + style_embed
         
@@ -840,14 +630,8 @@ class Tacotron(nn.Module) :
         # Run the decoder loop
         for t in range(0, steps, self.r) :
             # Passing only the last frame - could pass all frames
-            print(t)
-            print(len(mel_outputs))
-            if t == 0:
-                prenet_in = go_frame
-            elif t > 0:
-                prenet_in = mel_outputs[-1][:, :, -1] 
+            prenet_in = mel_outputs[-1][:, :, -1] if t > 0 else go_frame 
             
-
             mel_frames, scores, hidden_states, cell_states, context_vec = \
             self.decoder(final_encoder_seq, encoder_seq_proj, prenet_in, 
                          hidden_states, cell_states, context_vec, t)
@@ -856,32 +640,8 @@ class Tacotron(nn.Module) :
             # Stop the loop if silent frames present
             if (mel_frames < -3.8).all() and t > 10 : break
        
-        #print("HERE!") 
-        #print("XX", mel_outputs[0])        
-       # print("d1:", len(mel_outputs))
-       # print("d2", len(mel_outputs[0]))
-       # print("d3:", len(mel_outputs[0][0]))
         
-        
-    
-        #print("d4", mel_outputs[0][0][0][0])
-        #print("d4", mel_outputs[1][0][0:3])
-        #print("d4", mel_outputs[2][0][0:3])
-
-        #print("Concatenate")
-        
-        # Concat the mel outputs into sequence
         mel_outputs = torch.cat(mel_outputs, dim=2)
-                 
-        
-        
-        #print("d5", len(mel_outputs))
-        #print("d6", len(mel_outputs[0]))
-        #print("d7", len(mel_outputs[0][0]))
-        #print("d8", mel_outputs[0][0][0:10])
-        
-
-        #print("d3:", mel_outputs.shape)
         
         # Post-Process for Linear Spectrograms
         postnet_out, _ = self.postnet(mel_outputs)
@@ -897,9 +657,9 @@ class Tacotron(nn.Module) :
         attn_scores = torch.cat(attn_scores, 1)
         attn_scores = attn_scores.cpu().data.numpy()[0]
         
-        #elf.encoder.train()
-        #elf.postnet.train()
-        #elf.decoder.generating = False
+        self.encoder.train()
+        self.postnet.train()
+        self.decoder.generating = False
         
         return mel_outputs, linear, attn_scores
     
