@@ -196,8 +196,8 @@ class Decoder(nn.Module):
         self.generating = False
         self.n_mels = n_mels
         self.prenet = PreNet(n_mels)
-        #self.attn_net = Attention(decoder_dims)
-        self.attn_net = LSA(decoder_dims)
+        self.attn_net = Attention(decoder_dims)
+#       self.attn_net = LSA(decoder_dims)
 
         self.attn_rnn = nn.GRUCell(decoder_dims + decoder_dims // 2, decoder_dims)
         self.rnn_input = nn.Linear(2 * decoder_dims, lstm_dims)

@@ -3,12 +3,12 @@
 
 # Here are the input and output data paths (Note: you can override wav_path in preprocess.py)
 wav_path = '/home/avashna/LJSpeech-1.1/wavs_train'
-data_path = '/home/avashna//wave_rnn/data/'
+data_path = '/home/avashna//data/'
 eval_path = '/home/avashna/LJSpeech-1.1/wavs_eval'
 # model ids are separate - that way you can use a new tts with an old wavernn and vice versa
 # NB: expect undefined behaviour if models were trained on different DSP settings
 voc_model_id = 'ljspeech_final_vocoder'
-tts_model_id = 'ljspeech_tacotron_gst'
+tts_model_id = 'lj_reference_encoder'
 
 # set this to True if you are only interested in WaveRNN
 ignore_tts = False
@@ -66,7 +66,8 @@ voc_overlap = 550                   # number of samples for crossfading between 
 tts_r = 1                           # model predicts r frames per output step
 tts_embed_dims = 256                # embedding dimension for the graphemes/phoneme inputs
 tts_encoder_dims = 128
-tts_decoder_dims = 256
+#tts_decoder_dims = 256 
+tts_decoder_dims = 512
 tts_postnet_dims = 128
 tts_encoder_K = 16
 tts_lstm_dims = 512
@@ -79,10 +80,10 @@ tts_cleaner_names = ['voxygen_cleaners']
 # Training
 
 
-tts_schedule = [(7,  1e-3,  10_000,  32),   # progressive training schedule
-                (5,  1e-4, 100_000,  32),   # (r, lr, step, batch_size)
-                (2,  1e-4, 180_000,  16),
-                (1,  1e-4, 350_000,  8)]
+tts_schedule = [(7,  1e-3, 50_000,  32),   # progressive training schedule
+                (5,  5e-4, 100_000,  32),   # (r, lr, step, batch_size)
+                (2,  3e-4, 150_000,  16),
+                (1,  1e-4, 200_000,  8)]
 
 tts_max_mel_len = 1250              # if you have a couple of extremely long spectrograms you might want to use this
 tts_bin_lengths = True              # bins the spectrogram lengths before sampling in data loader - speeds up training
@@ -91,9 +92,9 @@ tts_checkpoint_every = 2_000        # checkpoints the model every X steps
 # TODO: tts_phoneme_prob = 0.0              # [0 <-> 1] probability for feeding model phonemes vrs graphemes
 
 # GST Parameters
-ref_enc_filters = [32, 32, 64, 64, 128, 128]
-token_num = 10
-num_heads = 8
+ref_enc_filters = [32, 32, 64, 64, 128, 128] # reference encoder
+token_num = 10 # global style token attention heads
+num_heads = 4 
 
 # ------------------------------------------------------------------------------------------------------------------#
 

@@ -2,13 +2,11 @@ import torch
 from models.fatchord_version import WaveRNN
 import hparams as hp
 from utils.text.symbols import symbols
-from models.tacotron_ref_encoder import Tacotron
+from models.tacotron_swap import Tacotron
 import argparse
 from utils.text import text_to_sequence
 from utils.display import save_attention, simple_table
 import zipfile, os
-from utils.paths import Paths
-from utils.dataset import get_eval_dataset
 
 
 
@@ -78,16 +76,15 @@ if __name__ == "__main__" :
                          lstm_dims=hp.tts_lstm_dims,
                          postnet_K=hp.tts_postnet_K,
                          num_highways=hp.tts_num_highways,
-                         dropout=hp.tts_dropout,
-                         ref_enc_filters=hp.ref_enc_filters).cuda()
+                         dropout=hp.tts_dropout).cuda()
 
 
-    tts_model.restore('checkpoints/lj_reference_encoder.tacotron/lj_reference_encoder_200K_steps.pyt')
-    
+    tts_model.restore('checkpoints/ljspeech_final_tacotron.tacotron/vanilla_tacotron_200k_steps.pyt')
+
     if input_text :
         inputs = [text_to_sequence(input_text.strip(), hp.tts_cleaner_names)]
     else :
-        with open('testing_transfer.txt') as f :
+        with open('test_sentences.txt') as f :
             inputs = [text_to_sequence(l.strip(), hp.tts_cleaner_names) for l in f]
 
     voc_k = voc_model.get_step() // 1000
@@ -101,30 +98,21 @@ if __name__ == "__main__" :
                   ('Target Samples', target if batched else 'N/A'),
                   ('Overlap Samples', overlap if batched else 'N/A')])
 
-    paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
+    for i, x in enumerate(inputs, 1) :
 
-    eval_set, _ = get_eval_dataset(paths.data, 1,5)
-    ref_m = None
+        print(f'\n| Generating {i}/{len(inputs)}')
+        _, m, attention = tts_model.generate(x)
 
-    for j, (x, m, ids, _) in enumerate(eval_set, 1):
-        ref_m = m.cuda()
-        print("Generating with id: ", ids)
+        if input_text :
+            save_path = f'quick_start/__input_{input_text[:10]}_{tts_k}k.wav'
+        else :
+            save_path = f'quick_start/{i}_batched{str(batched)}_{tts_k}k.wav'
 
-        for i, x in enumerate(inputs, 1):
+        save_attention(attention, save_path)
 
-                print(f'\n| Generating {i}/{len(inputs)}')
-                _, m, attention = tts_model.generate(x, ref_m)
+        m = torch.tensor(m).unsqueeze(0)
+        m = (m + 4) / 8
 
-                if input_text :
-                    save_path = f'quick_start/__input_{input_text[:10]}_{tts_k}k.wav'
-                else :
-                    save_path = f'quick_start/{i}__transfer_{ids}_{tts_k}k.wav'
-
-                save_attention(attention, save_path)
-
-                m = torch.tensor(m).unsqueeze(0)
-                m = (m + 4) / 8
-
-                voc_model.generate(m, save_path, batched, hp.voc_target, hp.voc_overlap, hp.mu_law)
+        voc_model.generate(m, save_path, batched, hp.voc_target, hp.voc_overlap, hp.mu_law)
 
     print('\n\nDone.\n')

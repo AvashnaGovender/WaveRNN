@@ -79,7 +79,7 @@ if __name__ == "__main__" :
                          dropout=hp.tts_dropout).cuda()
 
 
-    tts_model.restore('checkpoints/lj_swapped_attention.tacotron/checkpoint_300k_steps.pyt')
+    tts_model.restore('checkpoints/ljspeech_final_tacotron.tacotron/vanilla_tacotron_200k_steps.pyt')
 
     if input_text :
         inputs = [text_to_sequence(input_text.strip(), hp.tts_cleaner_names)]
