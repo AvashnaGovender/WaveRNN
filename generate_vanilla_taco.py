@@ -84,7 +84,7 @@ if __name__ == "__main__" :
     if input_text :
         inputs = [text_to_sequence(input_text.strip(), hp.tts_cleaner_names)]
     else :
-        with open('test_sentences.txt') as f :
+        with open('test_sentences_all.txt') as f :
             inputs = [text_to_sequence(l.strip(), hp.tts_cleaner_names) for l in f]
 
     voc_k = voc_model.get_step() // 1000
@@ -106,7 +106,7 @@ if __name__ == "__main__" :
         if input_text :
             save_path = f'quick_start/__input_{input_text[:10]}_{tts_k}k.wav'
         else :
-            save_path = f'quick_start/{i}_batched{str(batched)}_{tts_k}k.wav'
+            save_path = f'model_outputs/vanilla/{i}_{tts_k}k.wav'
 
         save_attention(attention, save_path)
 

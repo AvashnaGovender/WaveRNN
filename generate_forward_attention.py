@@ -62,7 +62,7 @@ if __name__ == "__main__" :
                         sample_rate=hp.sample_rate,
                         mode='MOL').cuda()
 
-    voc_model.restore('/home/avashna/wave_rnn/checkpoints/ljspeech_final_vocoder.wavernn/wave_rnn_600k_steps.pyt')
+    voc_model.restore('checkpoints/ljspeech_final_vocoder.wavernn/wave_rnn_600k_steps.pyt')
 
     print('\nInitialising Tacotron Model...\n')
 
@@ -82,7 +82,7 @@ if __name__ == "__main__" :
                          ref_enc_filters=hp.ref_enc_filters).cuda()
 
 
-    tts_model.restore('checkpoints//lj_forward_attention_ref_encoder.tacotron/checkpoint_160k_steps.pyt')
+    tts_model.restore('checkpoints/lj_forward_attention_ref_encoder.tacotron/checkpoint_186k_steps.pyt')
     
     if input_text :
         inputs = [text_to_sequence(input_text.strip(), hp.tts_cleaner_names)]
@@ -118,7 +118,7 @@ if __name__ == "__main__" :
                 if input_text :
                     save_path = f'quick_start/__input_{input_text[:10]}_{tts_k}k.wav'
                 else :
-                    save_path = f'quick_start/{i}__transfer_{ids}_{tts_k}k.wav'
+                    save_path = f'model_outputs/forward_ref/{i}__transfer_{ids}_{tts_k}k.wav'
 
                 save_attention(attention, save_path)
 

@@ -82,12 +82,12 @@ if __name__ == "__main__" :
                          ref_enc_filters=hp.ref_enc_filters).cuda()
 
 
-    tts_model.restore('checkpoints/lj_reference_encoder.tacotron/lj_reference_encoder_200K_steps.pyt')
+    tts_model.restore('checkpoints/lj_reference_encoder.tacotron/checkpoint_200k_steps.pyt')
     
     if input_text :
         inputs = [text_to_sequence(input_text.strip(), hp.tts_cleaner_names)]
     else :
-        with open('testing_transfer.txt') as f :
+        with open('test_sentences_all.txt') as f :
             inputs = [text_to_sequence(l.strip(), hp.tts_cleaner_names) for l in f]
 
     voc_k = voc_model.get_step() // 1000
@@ -118,7 +118,7 @@ if __name__ == "__main__" :
                 if input_text :
                     save_path = f'quick_start/__input_{input_text[:10]}_{tts_k}k.wav'
                 else :
-                    save_path = f'quick_start/{i}__transfer_{ids}_{tts_k}k.wav'
+                    save_path = f'model_outputs/ref_taco/{i}_transfer_{ids}_{tts_k}k.wav'
 
                 save_attention(attention, save_path)
 
